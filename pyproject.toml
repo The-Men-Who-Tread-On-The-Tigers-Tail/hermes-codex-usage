@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-codex-usage"
+version = "0.1.0"
+description = "Hermes Desktop plugin for ChatGPT/Codex subscription usage"
+requires-python = ">=3.9"
+dependencies = ["fastapi>=0.115,<1"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9", "pytest-asyncio>=0.23,<1"]
+
+[tool.setuptools.packages.find]
+include = ["dashboard*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = [
+  "live_codex: invoke the locally authenticated Codex CLI",
+]

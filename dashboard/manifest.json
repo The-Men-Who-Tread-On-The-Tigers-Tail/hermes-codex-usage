@@ -1,0 +1,7 @@
+{
+  "name": "hermes-codex-usage",
+  "label": "Codex Usage",
+  "description": "ChatGPT/Codex subscription quota viewer",
+  "version": "0.1.0",
+  "api": "plugin_api.py"
+}
