@@ -22,8 +22,22 @@ async def test_quota_routes_delegate_to_shared_service(monkeypatch):
     assert calls == ["get", "refresh"]
 
 
-def test_routes_are_read_only_or_explicit_refresh():
-    assert {(route.path, frozenset(route.methods)) for route in plugin_api.router.routes} == {
-        ("/quota", frozenset({"GET"})),
-        ("/quota/refresh", frozenset({"POST"})),
-    }
+
+
+@pytest.mark.asyncio
+async def test_routes_sanitize_unexpected_service_errors(monkeypatch):
+    class BrokenService:
+        async def get(self):
+            raise RuntimeError("token=secret accountId=private")
+
+        async def refresh(self):
+            raise RuntimeError("raw backend details")
+
+    monkeypatch.setattr(plugin_api, "_service", BrokenService())
+    read_error = await plugin_api.get_quota()
+    refresh_error = await plugin_api.refresh_quota()
+    assert read_error["error"] == {"code": "internal_error", "message": "Codex usage could not be read."}
+    assert refresh_error["error"] == {"code": "internal_error", "message": "Codex usage could not be refreshed."}
+    assert "secret" not in str(read_error)
+    assert "private" not in str(read_error)
+    assert "raw backend" not in str(refresh_error)

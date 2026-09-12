@@ -1,9 +1,11 @@
 import {
-  host,
   useQuery,
   queryClient,
   Button,
   Badge,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
   cn
 } from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
@@ -33,7 +35,7 @@ function windowLabel(window) {
 
 function refresh() {
   if (!rest) return Promise.resolve()
-  return rest('/quota/refresh').then(function (data) {
+  return rest('/quota/refresh', { method: 'POST' }).then(function (data) {
     queryClient.setQueryData(QUERY_KEY, data)
     return data
   })
@@ -134,11 +136,23 @@ function StatusChip() {
   const codex = (data.limits || []).find(function (item) { return item.limitId === 'codex' }) || (data.limits || [])[0]
   if (!codex || !codex.windows.length) return null
   const parts = codex.windows.map(function (window) { return `${window.window === 'five_hour' ? '5h' : window.window === 'weekly' ? 'W' : 'C'} ${formatPercent(window.remainingPercent)}` })
-  return jsx('button', {
-    type: 'button',
-    className: cn('px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)', 'hover:bg-(--chrome-action-hover) hover:text-foreground'),
-    onClick: function () { host.notify({ kind: 'info', message: 'Open the Codex Usage pane for details.' }) },
-    children: `Codex · ${parts.join(' · ')}`
+  return jsx(Popover, {
+    children: [
+      jsx(PopoverTrigger, {
+        key: 'trigger',
+        children: jsx('button', {
+          type: 'button',
+          className: cn('inline-flex h-full items-center px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)', 'hover:bg-(--chrome-action-hover) hover:text-foreground'),
+          children: `Codex · ${parts.join(' · ')}`
+        })
+      }),
+      jsx(PopoverContent, {
+        key: 'content',
+        align: 'end',
+        className: 'z-50 w-80 rounded-lg border border-(--ui-stroke-secondary) p-1 shadow-lg',
+        children: jsx(UsageContent, {})
+      })
+    ]
   })
 }
 

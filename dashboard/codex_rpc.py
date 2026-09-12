@@ -28,7 +28,7 @@ class CodexAppServerClient:
                 executable, "app-server", "--stdio",
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
             )
             await self._send(process, {
                 "id": "hermes-init",
@@ -74,7 +74,12 @@ class CodexAppServerClient:
             line = await asyncio.wait_for(process.stdout.readline(), timeout=self.timeout)
             if not line:
                 raise CodexUsageError("codex_process_error", "The Codex app-server process ended unexpectedly.")
-            message = json.loads(line.decode())
+            if len(line) > 1024 * 1024:
+                raise CodexUsageError("invalid_response", "Codex returned an oversized usage message.")
+            try:
+                message = json.loads(line.decode())
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                raise CodexUsageError("invalid_response", "Codex returned invalid usage data.")
             if message.get("id") != request_id:
                 continue
             if "error" in message:

@@ -15,9 +15,29 @@ _service = QuotaService()
 
 @router.get("/quota")
 async def get_quota():
-    return await _service.get()
+    try:
+        return await _service.get()
+    except Exception:
+        return {
+            "success": False,
+            "source": "codex-app-server",
+            "fetchedAt": None,
+            "stale": False,
+            "error": {"code": "internal_error", "message": "Codex usage could not be read."},
+            "limits": [],
+        }
 
 
 @router.post("/quota/refresh")
 async def refresh_quota():
-    return await _service.refresh()
+    try:
+        return await _service.refresh()
+    except Exception:
+        return {
+            "success": False,
+            "source": "codex-app-server",
+            "fetchedAt": None,
+            "stale": False,
+            "error": {"code": "internal_error", "message": "Codex usage could not be refreshed."},
+            "limits": [],
+        }
