@@ -1,12 +1,17 @@
 """FastAPI routes for the Hermes Codex usage desktop plugin."""
 from __future__ import annotations
 
+from pathlib import Path
+import sys
+
 from fastapi import APIRouter
 
-try:
-    from .quota import QuotaService
-except ImportError:  # Hermes may load dashboard modules as top-level files.
-    from quota import QuotaService
+# Hermes loads this file as a standalone module rather than as a package.
+_dashboard_dir = str(Path(__file__).resolve().parent)
+if _dashboard_dir not in sys.path:
+    sys.path.insert(0, _dashboard_dir)
+
+from quota import QuotaService
 
 
 router = APIRouter()

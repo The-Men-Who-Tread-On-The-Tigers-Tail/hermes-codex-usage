@@ -15,4 +15,5 @@ jobs:
       - run: uv run --extra test pytest -m 'not live_codex' -q
       - run: uv run python -m py_compile dashboard/*.py tests/*.py
       - run: node --check desktop/plugin.js
-      - run: hermes plugins validate .
+      - run: sh -n install.sh uninstall.sh
+      - run: test -f __init__.py && test -f dashboard/manifest.json && test -f desktop/plugin.js

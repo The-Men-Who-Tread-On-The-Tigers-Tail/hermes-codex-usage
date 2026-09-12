@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 
@@ -13,13 +14,23 @@ class CodexUsageError(Exception):
         self.code = code
 
 
+def _resolve_executable(executable: str) -> Optional[str]:
+    resolved = shutil.which(executable)
+    if resolved is not None or executable != "codex":
+        return resolved
+    local_codex = Path.home() / ".local" / "bin" / "codex"
+    if local_codex.is_file() and local_codex.stat().st_mode & 0o111:
+        return str(local_codex)
+    return None
+
+
 class CodexAppServerClient:
     def __init__(self, executable: str = "codex", timeout: float = 10.0) -> None:
         self.executable = executable
         self.timeout = timeout
 
     async def read_rate_limits(self) -> Dict[str, Any]:
-        executable = shutil.which(self.executable)
+        executable = _resolve_executable(self.executable)
         if executable is None:
             raise CodexUsageError("codex_not_found", "Codex CLI was not found on PATH.")
         process = None

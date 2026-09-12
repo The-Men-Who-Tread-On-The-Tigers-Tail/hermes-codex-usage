@@ -23,6 +23,7 @@ fi
 
 rm -rf "$STAGE" "$BACKUP"
 mkdir "$STAGE"
+cp "$REPO_DIR/__init__.py" "$STAGE/"
 cp "$REPO_DIR/plugin.yaml" "$STAGE/"
 cp -R "$REPO_DIR/dashboard" "$STAGE/"
 cp -R "$REPO_DIR/desktop" "$STAGE/"

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from dashboard.codex_rpc import CodexAppServerClient, CodexUsageError
+from dashboard.codex_rpc import CodexAppServerClient, CodexUsageError, _resolve_executable
 
 
 @pytest.fixture
@@ -37,8 +37,21 @@ async def test_client_matches_json_rpc_responses_and_ignores_notifications(fake_
 
 
 @pytest.mark.asyncio
-async def test_client_reports_missing_executable(monkeypatch):
+async def test_client_reports_missing_executable(monkeypatch, tmp_path):
     monkeypatch.setattr("dashboard.codex_rpc.shutil.which", lambda _: None)
+    monkeypatch.setattr("dashboard.codex_rpc.Path.home", lambda: tmp_path)
     with pytest.raises(CodexUsageError, match="not found") as exc:
         await CodexAppServerClient().read_rate_limits()
     assert exc.value.code == "codex_not_found"
+
+
+def test_default_codex_resolves_from_local_bin(monkeypatch, tmp_path):
+    local_codex = tmp_path / ".local" / "bin" / "codex"
+    local_codex.parent.mkdir(parents=True)
+    local_codex.write_text("#!/bin/sh\n")
+    local_codex.chmod(local_codex.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setattr("dashboard.codex_rpc.shutil.which", lambda _: None)
+    monkeypatch.setattr("dashboard.codex_rpc.Path.home", lambda: tmp_path)
+
+    assert _resolve_executable("codex") == str(local_codex)
+    assert _resolve_executable("custom-codex") is None

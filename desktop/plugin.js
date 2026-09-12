@@ -101,7 +101,7 @@ function UsageContent() {
     retry: 1
   })
   if (query.isLoading && !query.data) return jsx('div', { className: 'p-3 text-sm text-(--ui-text-secondary)', children: 'Loading Codex usage…' })
-  if (!query.data || !query.data.success) return jsx(ErrorState, { data: query.data })
+  if (!query.data || !query.data.success) return jsx(ErrorState, { data: query.data || { error: query.error } })
   const limits = query.data.limits || []
   return jsxs('div', {
     className: 'flex flex-col gap-3 p-3',
@@ -124,6 +124,18 @@ function UsagePane() {
   return jsx(UsageContent, {})
 }
 
+function selectStatusWindows(limits) {
+  const preferred = (limits || []).filter(function (item) { return item.limitId === 'codex' })
+  const fallback = (limits || []).filter(function (item) { return item.limitId !== 'codex' })
+  const byWindow = new Map()
+  preferred.concat(fallback).forEach(function (limit) {
+    ;(limit.windows || []).forEach(function (window) {
+      if (!byWindow.has(window.window)) byWindow.set(window.window, window)
+    })
+  })
+  return ['five_hour', 'weekly'].map(function (name) { return byWindow.get(name) }).filter(Boolean)
+}
+
 function StatusChip() {
   const query = useQuery({
     queryKey: QUERY_KEY,
@@ -132,14 +144,36 @@ function StatusChip() {
     retry: 1
   })
   const data = query.data
-  if (!data || !data.success) return null
-  const codex = (data.limits || []).find(function (item) { return item.limitId === 'codex' }) || (data.limits || [])[0]
-  if (!codex || !codex.windows.length) return null
-  const parts = codex.windows.map(function (window) { return `${window.window === 'five_hour' ? '5h' : window.window === 'weekly' ? 'W' : 'C'} ${formatPercent(window.remainingPercent)}` })
+  if (!data || !data.success) {
+    return jsx(Popover, {
+      children: [
+        jsx(PopoverTrigger, {
+          key: 'trigger',
+          asChild: true,
+          children: jsx('button', {
+            type: 'button',
+            className: cn('inline-flex h-full items-center px-1.5 text-[0.6875rem] text-(--ui-text-quaternary)', 'hover:bg-(--chrome-action-hover) hover:text-foreground'),
+            children: 'Codex · unavailable'
+          })
+        }),
+        jsx(PopoverContent, {
+          key: 'content',
+          align: 'end',
+          side: 'top',
+          className: 'z-50 w-80 rounded-lg border border-(--ui-stroke-secondary) p-1 shadow-lg',
+          children: jsx(ErrorState, { data: data || { error: query.error } })
+        })
+      ]
+    })
+  }
+  const windows = selectStatusWindows(data.limits || [])
+  if (!windows.length) return null
+  const parts = windows.map(function (window) { return `${window.window === 'five_hour' ? '5h' : window.window === 'weekly' ? 'W' : 'C'} ${formatPercent(window.remainingPercent)}` })
   return jsx(Popover, {
     children: [
       jsx(PopoverTrigger, {
         key: 'trigger',
+        asChild: true,
         children: jsx('button', {
           type: 'button',
           className: cn('inline-flex h-full items-center px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)', 'hover:bg-(--chrome-action-hover) hover:text-foreground'),
@@ -149,6 +183,7 @@ function StatusChip() {
       jsx(PopoverContent, {
         key: 'content',
         align: 'end',
+        side: 'top',
         className: 'z-50 w-80 rounded-lg border border-(--ui-stroke-secondary) p-1 shadow-lg',
         children: jsx(UsageContent, {})
       })
