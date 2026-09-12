@@ -14,6 +14,18 @@ class CodexUsageError(Exception):
         self.code = code
 
 
+def _classify_rpc_error(error: Any) -> str:
+    if not isinstance(error, dict):
+        return "rpc_error"
+    code = error.get("code")
+    data = error.get("data")
+    if code in {"auth_required", "authentication_required", "unauthorized"}:
+        return "auth_required"
+    if isinstance(data, dict) and data.get("authRequired") is True:
+        return "auth_required"
+    return "rpc_error"
+
+
 def _resolve_executable(executable: str) -> Optional[str]:
     resolved = shutil.which(executable)
     if resolved is not None or executable != "codex":
@@ -44,7 +56,7 @@ class CodexAppServerClient:
             await self._send(process, {
                 "id": "hermes-init",
                 "method": "initialize",
-                "params": {"clientInfo": {"name": "hermes-codex-usage", "title": "Hermes Codex Usage", "version": "0.1.0"}},
+                "params": {"clientInfo": {"name": "hermes-codex-usage", "title": "Hermes Codex Usage", "version": "0.2.0"}},
             })
             await self._read_response(process, "hermes-init")
             await self._send(process, {"method": "initialized", "params": {}})
@@ -94,5 +106,7 @@ class CodexAppServerClient:
             if message.get("id") != request_id:
                 continue
             if "error" in message:
-                raise CodexUsageError("rpc_error", "Codex rejected the usage request.")
+                code = _classify_rpc_error(message["error"])
+                text = "Codex CLI is not signed in." if code == "auth_required" else "Codex rejected the usage request."
+                raise CodexUsageError(code, text)
             return message

@@ -1,0 +1,2 @@
+{"method":"codex/event","params":{"type":"status"}}
+{"method":"codex/event","params":{"type":"progress"}}

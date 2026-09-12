@@ -6,7 +6,8 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-  cn
+  cn,
+  host
 } from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
@@ -34,9 +35,10 @@ function windowLabel(window) {
 }
 
 function refresh() {
-  if (!rest) return Promise.resolve()
-  return rest('/quota/refresh', { method: 'POST' }).then(function (data) {
+  if (!rest) return Promise.reject(new Error('Backend unavailable'))
+  return rest('/quota/refresh', { method: 'POST' }).then(async function (data) {
     queryClient.setQueryData(QUERY_KEY, data)
+    await queryClient.invalidateQueries({ queryKey: QUERY_KEY })
     return data
   })
 }
@@ -80,6 +82,19 @@ function LimitCard({ limit }) {
   })
 }
 
+function groupLimits(items) {
+  const groups = new Map()
+  ;(items || []).forEach(function (item) {
+    let group = groups.get(item.limitId)
+    if (!group) {
+      group = { limitId: item.limitId, limitName: item.limitName, windows: [] }
+      groups.set(item.limitId, group)
+    }
+    group.windows.push(item)
+  })
+  return Array.from(groups.values())
+}
+
 function ErrorState({ data }) {
   const error = data && (data.error || data.refreshError)
   return jsxs('div', {
@@ -94,15 +109,10 @@ function ErrorState({ data }) {
 }
 
 function UsageContent() {
-  const query = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: function () { return rest ? rest('/quota') : Promise.resolve({ success: false, limits: [], error: { message: 'Backend unavailable' } }) },
-    refetchInterval: POLL_MS,
-    retry: 1
-  })
+  const query = useQuotaQuery()
   if (query.isLoading && !query.data) return jsx('div', { className: 'p-3 text-sm text-(--ui-text-secondary)', children: 'Loading Codex usage…' })
   if (!query.data || !query.data.success) return jsx(ErrorState, { data: query.data || { error: query.error } })
-  const limits = query.data.limits || []
+  const limits = groupLimits(query.data.limits || [])
   return jsxs('div', {
     className: 'flex flex-col gap-3 p-3',
     children: [
@@ -120,29 +130,36 @@ function UsageContent() {
   })
 }
 
-function UsagePane() {
-  return jsx(UsageContent, {})
-}
-
 function selectStatusWindows(limits) {
   const preferred = (limits || []).filter(function (item) { return item.limitId === 'codex' })
   const fallback = (limits || []).filter(function (item) { return item.limitId !== 'codex' })
   const byWindow = new Map()
-  preferred.concat(fallback).forEach(function (limit) {
-    ;(limit.windows || []).forEach(function (window) {
-      if (!byWindow.has(window.window)) byWindow.set(window.window, window)
-    })
+  preferred.concat(fallback).forEach(function (window) {
+    if (!byWindow.has(window.window)) byWindow.set(window.window, window)
   })
-  return ['five_hour', 'weekly'].map(function (name) { return byWindow.get(name) }).filter(Boolean)
+  const standard = ['five_hour', 'weekly'].map(function (name) { return byWindow.get(name) }).filter(Boolean)
+  if (standard.length) return standard
+  return fallback.filter(function (window) { return window.window === 'custom' }).sort(function (a, b) {
+    return a.windowDurationMins - b.windowDurationMins
+  }).slice(0, 1)
 }
 
-function StatusChip() {
-  const query = useQuery({
+function formatWindowSummary(window) {
+  const label = window.window === 'five_hour' ? '5h' : window.window === 'weekly' ? 'W' : `${window.windowDurationMins}m`
+  return `${label} ${formatPercent(window.remainingPercent)}`
+}
+
+function useQuotaQuery() {
+  return useQuery({
     queryKey: QUERY_KEY,
-    queryFn: function () { return rest ? rest('/quota') : Promise.resolve({ success: false, limits: [] }) },
+    queryFn: function () { return rest ? rest('/quota') : Promise.resolve({ success: false, limits: [], error: { message: 'Backend unavailable' } }) },
     refetchInterval: POLL_MS,
     retry: 1
   })
+}
+
+function StatusChip() {
+  const query = useQuotaQuery()
   const data = query.data
   if (!data || !data.success) {
     return jsx(Popover, {
@@ -168,7 +185,7 @@ function StatusChip() {
   }
   const windows = selectStatusWindows(data.limits || [])
   if (!windows.length) return null
-  const parts = windows.map(function (window) { return `${window.window === 'five_hour' ? '5h' : window.window === 'weekly' ? 'W' : 'C'} ${formatPercent(window.remainingPercent)}` })
+  const parts = windows.map(formatWindowSummary)
   return jsx(Popover, {
     children: [
       jsx(PopoverTrigger, {
@@ -197,9 +214,17 @@ export default {
   register: function (ctx) {
     rest = ctx.rest
     ctx.registerMany([
-      { id: 'usage-pane', area: 'panes', title: 'Codex Usage', data: { placement: 'right', width: '320px' }, render: function () { return jsx(UsagePane, {}) } },
+      { id: 'usage-pane', area: 'panes', title: 'Codex Usage', data: { placement: 'right', width: '320px' }, render: function () { return jsx(UsageContent, {}) } },
       { id: 'usage-chip', area: 'statusBar.right', order: 110, render: function () { return jsx(StatusChip, {}) } },
-      { id: 'usage-command', area: 'palette', data: { label: 'Refresh Codex usage', category: 'Codex', run: function () { return refresh() } } }
+      { id: 'usage-command', area: 'palette', data: { label: 'Refresh Codex usage', category: 'Codex', run: async function () {
+        try {
+          const data = await refresh()
+          if (!data.success) throw new Error('refresh failed')
+          host.notify({ kind: 'info', message: 'Codex usage refreshed.' })
+        } catch {
+          host.notify({ kind: 'error', message: 'Codex usage could not be refreshed.' })
+        }
+      } }
     ])
   }
 }

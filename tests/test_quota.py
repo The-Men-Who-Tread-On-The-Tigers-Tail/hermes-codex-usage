@@ -19,11 +19,14 @@ def test_normalizes_duration_and_keeps_all_limit_ids():
         "accountId": "must-not-leak",
         "credits": {"hasCredits": False, "unlimited": False, "balance": "0", "secret": "x"},
     }, fetched_at="2026-01-01T00:00:00+00:00")
-    assert [x["limitId"] for x in result["limits"]] == ["codex", "codex_bengalfox"]
-    assert result["limits"][0]["windows"][0]["window"] == "weekly"
-    windows = {x["window"]: x for x in result["limits"][1]["windows"]}
-    assert windows["five_hour"]["remainingPercent"] == 0
-    assert windows["weekly"]["remainingPercent"] == 80
+    assert [(x["limitId"], x["window"]) for x in result["limits"]] == [
+        ("codex", "weekly"),
+        ("codex_bengalfox", "five_hour"),
+        ("codex_bengalfox", "weekly"),
+    ]
+    windows = {(x["limitId"], x["window"]): x for x in result["limits"]}
+    assert windows[("codex_bengalfox", "five_hour")]["remainingPercent"] == 0
+    assert windows[("codex_bengalfox", "weekly")]["remainingPercent"] == 80
     assert "accountId" not in str(result)
     assert "secret" not in str(result)
 
@@ -51,7 +54,7 @@ async def test_service_caches_success_and_force_refreshes():
     forced = await service.refresh()
     assert client.calls == 2
     assert first is second
-    assert forced["limits"][0]["windows"][0]["usedPercent"] == 2
+    assert forced["limits"][0]["usedPercent"] == 2
 
 
 @pytest.mark.asyncio
@@ -71,3 +74,49 @@ async def test_service_keeps_last_good_snapshot_on_error():
     assert good["stale"] is False
     assert stale["stale"] is True
     assert stale["refreshError"]["code"] == "timeout"
+
+
+@pytest.mark.asyncio
+async def test_service_deduplicates_concurrent_fetches():
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class Client:
+        calls = 0
+
+        async def read_rate_limits(self):
+            self.calls += 1
+            started.set()
+            await release.wait()
+            return {"rateLimits": {"limitId": "codex", "primary": {"usedPercent": 2, "windowDurationMins": 300}}}
+
+    client = Client()
+    service = QuotaService(client=client, ttl=0)
+    tasks = [asyncio.create_task(service.get(force=True)) for _ in range(3)]
+    await started.wait()
+    assert client.calls == 1
+    release.set()
+    results = await asyncio.gather(*tasks)
+    assert results[0] == results[1] == results[2]
+
+
+@pytest.mark.asyncio
+async def test_service_backoffs_initial_failures():
+    now = [0]
+
+    class Client:
+        calls = 0
+
+        async def read_rate_limits(self):
+            self.calls += 1
+            raise CodexUsageError("timeout", "timed out")
+
+    client = Client()
+    service = QuotaService(client=client, failure_ttl=5, clock=lambda: now[0])
+    first = await service.get()
+    second = await service.get()
+    assert first == second
+    assert client.calls == 1
+    now[0] = 6
+    await service.get()
+    assert client.calls == 2

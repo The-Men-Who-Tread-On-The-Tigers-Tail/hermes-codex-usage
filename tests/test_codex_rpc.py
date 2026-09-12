@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from dashboard.codex_rpc import CodexAppServerClient, CodexUsageError, _resolve_executable
+from dashboard.codex_rpc import CodexAppServerClient, CodexUsageError, _classify_rpc_error, _resolve_executable
 
 
 @pytest.fixture
@@ -55,3 +55,9 @@ def test_default_codex_resolves_from_local_bin(monkeypatch, tmp_path):
 
     assert _resolve_executable("codex") == str(local_codex)
     assert _resolve_executable("custom-codex") is None
+
+
+def test_rpc_error_classifier_only_accepts_explicit_auth_markers():
+    assert _classify_rpc_error({"code": "authentication_required"}) == "auth_required"
+    assert _classify_rpc_error({"data": {"authRequired": True}}) == "auth_required"
+    assert _classify_rpc_error({"code": "rpc_error", "message": "authentication failed"}) == "rpc_error"

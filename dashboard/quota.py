@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
@@ -25,12 +26,12 @@ def _window_name(minutes: Any) -> Optional[str]:
     return "custom" if value > 0 else None
 
 
-def _number(value: Any) -> Optional[float]:
+def _parse_finite_number(value: Any) -> Optional[float]:
     try:
         result = float(value)
     except (TypeError, ValueError):
         return None
-    return result if result == result else None
+    return result if math.isfinite(result) else None
 
 
 def _clean_credits(value: Any) -> Optional[Dict[str, Any]]:
@@ -66,29 +67,29 @@ def normalize_rate_limits(payload: Dict[str, Any], fetched_at: Optional[str] = N
                 continue
             duration = window.get("windowDurationMins")
             name = _window_name(duration)
-            used = _number(window.get("usedPercent"))
+            used = _parse_finite_number(window.get("usedPercent"))
             try:
                 duration_int = int(duration)
             except (TypeError, ValueError):
                 duration_int = None
             if name is None or used is None or duration_int is None:
                 continue
-            windows.append({
+            limits.append({
+                "limitId": limit_id,
+                "limitName": item.get("limitName") if isinstance(item.get("limitName"), str) else None,
                 "window": name,
                 "windowDurationMins": duration_int,
                 "usedPercent": used,
                 "remainingPercent": max(0.0, min(100.0, 100.0 - used)),
                 "resetsAt": window.get("resetsAt") if isinstance(window.get("resetsAt"), (int, float)) else None,
             })
-        if windows:
-            windows.sort(key=lambda w: (w["windowDurationMins"], w["window"]))
-            limits.append({
-                "limitId": limit_id,
-                "limitName": item.get("limitName") if isinstance(item.get("limitName"), str) else None,
-                "windows": windows,
-            })
 
-    limits.sort(key=lambda item: (0 if item["limitId"] == "codex" else 1, item["limitId"]))
+    limits.sort(key=lambda item: (
+        0 if item["limitId"] == "codex" else 1,
+        item["limitId"],
+        item["windowDurationMins"],
+        item["window"],
+    ))
     result: Dict[str, Any] = {
         "success": True,
         "source": "codex-app-server",
@@ -103,36 +104,51 @@ def normalize_rate_limits(payload: Dict[str, Any], fetched_at: Optional[str] = N
 
 
 class QuotaService:
-    def __init__(self, client: Optional[CodexAppServerClient] = None, ttl: float = 60.0, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, client: Optional[CodexAppServerClient] = None, ttl: float = 60.0, failure_ttl: float = 5.0, clock: Callable[[], float] = time.monotonic) -> None:
         self.client = client or CodexAppServerClient()
         self.ttl = ttl
+        self.failure_ttl = failure_ttl
         self.clock = clock
         self._snapshot: Optional[Dict[str, Any]] = None
         self._cached_at = 0.0
-        self._lock = asyncio.Lock()
+        self._failure_result: Optional[Dict[str, Any]] = None
+        self._failure_cached_at = 0.0
+        self._inflight: Optional[asyncio.Task] = None
 
     async def get(self, force: bool = False) -> Dict[str, Any]:
         now = self.clock()
         if not force and self._snapshot is not None and now - self._cached_at < self.ttl:
             return self._snapshot
-        async with self._lock:
-            now = self.clock()
-            if not force and self._snapshot is not None and now - self._cached_at < self.ttl:
-                return self._snapshot
-            try:
-                payload = await self.client.read_rate_limits()
-                snapshot = normalize_rate_limits(payload)
-            except CodexUsageError as exc:
-                if self._snapshot is not None:
-                    stale = dict(self._snapshot)
-                    stale["stale"] = True
-                    stale["refreshError"] = {"code": exc.code, "message": str(exc)}
-                    return stale
-                return {"success": False, "source": "codex-app-server", "fetchedAt": None, "stale": False,
-                        "error": {"code": exc.code, "message": str(exc)}, "limits": []}
-            self._snapshot = snapshot
-            self._cached_at = self.clock()
-            return snapshot
+        if not force and self._failure_result is not None and now - self._failure_cached_at < self.failure_ttl:
+            return self._failure_result
+        if self._inflight is None:
+            self._inflight = asyncio.create_task(self._fetch())
+            self._inflight.add_done_callback(self._clear_inflight)
+        return await asyncio.shield(self._inflight)
+
+    def _clear_inflight(self, task: asyncio.Task) -> None:
+        if self._inflight is task:
+            self._inflight = None
+
+    async def _fetch(self) -> Dict[str, Any]:
+        try:
+            payload = await self.client.read_rate_limits()
+            snapshot = normalize_rate_limits(payload)
+        except CodexUsageError as exc:
+            if self._snapshot is not None:
+                result = dict(self._snapshot)
+                result["stale"] = True
+                result["refreshError"] = {"code": exc.code, "message": str(exc)}
+            else:
+                result = {"success": False, "source": "codex-app-server", "fetchedAt": None, "stale": False,
+                          "error": {"code": exc.code, "message": str(exc)}, "limits": []}
+            self._failure_result = result
+            self._failure_cached_at = self.clock()
+            return result
+        self._snapshot = snapshot
+        self._cached_at = self.clock()
+        self._failure_result = None
+        return snapshot
 
     async def refresh(self) -> Dict[str, Any]:
         return await self.get(force=True)

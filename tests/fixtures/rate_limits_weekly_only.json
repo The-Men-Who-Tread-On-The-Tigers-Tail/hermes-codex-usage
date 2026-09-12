@@ -1,0 +1,8 @@
+{
+  "planType": "pro",
+  "rateLimitsByLimitId": {
+    "codex": {
+      "primary": {"usedPercent": 18, "windowDurationMins": 10080, "resetsAt": 1800000000}
+    }
+  }
+}

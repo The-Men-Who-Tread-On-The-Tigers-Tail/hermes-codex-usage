@@ -1,0 +1,12 @@
+{
+  "planType": "prolite",
+  "rateLimitsByLimitId": {
+    "codex": {
+      "primary": {"usedPercent": 5, "windowDurationMins": 10080, "resetsAt": 1800000000}
+    },
+    "codex_bengalfox": {
+      "primary": {"usedPercent": 0, "windowDurationMins": 300, "resetsAt": 1799990000},
+      "secondary": {"usedPercent": 12, "windowDurationMins": 10080, "resetsAt": 1800000000}
+    }
+  }
+}
