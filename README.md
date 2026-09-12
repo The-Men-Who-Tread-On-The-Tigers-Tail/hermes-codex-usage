@@ -39,7 +39,7 @@ Requirements:
 From a cloned repository:
 
 ```bash
-git clone https://github.com/OWNER/hermes-codex-usage.git
+git clone https://github.com/The-Men-Who-Tread-On-The-Tigers-Tail/hermes-codex-usage.git
 cd hermes-codex-usage
 ./install.sh
 hermes plugins enable hermes-codex-usage
