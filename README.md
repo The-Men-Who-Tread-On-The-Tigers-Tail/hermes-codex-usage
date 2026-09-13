@@ -83,7 +83,7 @@ See [SECURITY.md](SECURITY.md) for reporting security issues.
 
 If this plugin is useful to you, you can support its development:
 
-[Buy me a coffee](https://buymeacoffee.com/menwhotreadontigerstail)
+[![Buy Me a Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/menwhotreadontigerstail)
 
 ## License
 
