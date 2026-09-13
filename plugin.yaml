@@ -1,5 +1,5 @@
 name: hermes-codex-usage
-version: 0.2.0
+version: 0.2.1
 description: "Read-only ChatGPT/Codex subscription quota viewer for Hermes Desktop"
 author: Johann
 kind: backend
