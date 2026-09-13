@@ -13,7 +13,7 @@ import { jsx, jsxs } from 'react/jsx-runtime'
 
 const ID = 'hermes-codex-usage'
 const QUERY_KEY = [ID, 'quota']
-const POLL_MS = 60 * 1000
+const POLL_MS = 15 * 60 * 1000
 let rest = null
 
 function formatPercent(value) {
@@ -213,18 +213,16 @@ export default {
   name: 'Codex Usage',
   register: function (ctx) {
     rest = ctx.rest
-    ctx.registerMany([
-      { id: 'usage-pane', area: 'panes', title: 'Codex Usage', data: { placement: 'right', width: '320px' }, render: function () { return jsx(UsageContent, {}) } },
-      { id: 'usage-chip', area: 'statusBar.right', order: 110, render: function () { return jsx(StatusChip, {}) } },
-      { id: 'usage-command', area: 'palette', data: { label: 'Refresh Codex usage', category: 'Codex', run: async function () {
-        try {
-          const data = await refresh()
-          if (!data.success) throw new Error('refresh failed')
-          host.notify({ kind: 'info', message: 'Codex usage refreshed.' })
-        } catch {
-          host.notify({ kind: 'error', message: 'Codex usage could not be refreshed.' })
-        }
-      } }
-    ])
+    ctx.register({ id: 'usage-pane', area: 'panes', title: 'Codex Usage', data: { placement: 'right', width: '320px' }, render: function () { return jsx(UsageContent, {}) } })
+    ctx.register({ id: 'usage-chip', area: 'statusBar.right', order: 110, render: function () { return jsx(StatusChip, {}) } })
+    ctx.register({ id: 'usage-command', area: 'palette', data: { label: 'Refresh Codex usage', category: 'Codex', run: async function () {
+      try {
+        const data = await refresh()
+        if (!data.success) throw new Error('refresh failed')
+        host.notify({ kind: 'info', message: 'Codex usage refreshed.' })
+      } catch {
+        host.notify({ kind: 'error', message: 'Codex usage could not be refreshed.' })
+      }
+    } } })
   }
 }

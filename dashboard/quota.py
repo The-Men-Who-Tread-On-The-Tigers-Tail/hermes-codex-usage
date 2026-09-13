@@ -104,7 +104,7 @@ def normalize_rate_limits(payload: Dict[str, Any], fetched_at: Optional[str] = N
 
 
 class QuotaService:
-    def __init__(self, client: Optional[CodexAppServerClient] = None, ttl: float = 60.0, failure_ttl: float = 5.0, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, client: Optional[CodexAppServerClient] = None, ttl: float = 15 * 60.0, failure_ttl: float = 5.0, clock: Callable[[], float] = time.monotonic) -> None:
         self.client = client or CodexAppServerClient()
         self.ttl = ttl
         self.failure_ttl = failure_ttl
