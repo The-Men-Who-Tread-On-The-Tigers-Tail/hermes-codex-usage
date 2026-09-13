@@ -2,6 +2,6 @@
   "name": "hermes-codex-usage",
   "label": "Codex Usage",
   "description": "ChatGPT/Codex subscription quota viewer",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "api": "plugin_api.py"
 }
