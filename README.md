@@ -79,6 +79,12 @@ The plugin currently has no notifications, forecasting, automated model switchin
 
 See [SECURITY.md](SECURITY.md) for reporting security issues.
 
+## Support
+
+If this plugin is useful to you, you can support its development:
+
+[Buy me a coffee](https://buymeacoffee.com/menwhotreadontigerstail)
+
 ## License
 
 MIT
